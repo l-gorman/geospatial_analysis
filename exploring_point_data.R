@@ -2,13 +2,17 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(caret)
-
+library(reshape)
 
 
 #### Identify outliers ####
 
+
+LSMS_data<-read.csv("data/LSMS/Farm sizes/LSMS_Tanzania_landsizes.csv")
+
+
 TRUE_in_Vector<-function(vector){return (TRUE %in% vector)}
-identify_outlier_rows<-function(column){
+identify_outlier_rows_and_NAs<-function(column){
   
   column<-as.numeric(column)
   lower_quartile<-quantile(column,probs=0.25, na.rm=T)
@@ -29,32 +33,86 @@ identify_outlier_rows<-function(column){
 }
 
 
-plot(density(data$LandCultivated, na.rm = T)) #plotting whole column with outliers
-plot(density(data$LandCultivated[identify_outlier_rows(data$LandCultivated)==FALSE], na.rm = T)) #plotting column without outliers
 
 
-
+# read in data
 data<-read.csv("data/processed/point_data_processed.csv", na.strings = c("NaN", "n/a"))
 AEZ_categories<-read.csv("data/AEZ_Categories/AEZ_categories.csv", na.strings = c("NaN", "n/a"))
 AEZ_categories$X<-NULL
 
+# Converting Numerical AEZ categories to Names
 data<-merge(data, AEZ_categories, by.x="raster_level_AEZ", by.y="AEZ_Numbers")
 most_important_variables<-read.csv("exploratory_outputs/LandCultivated_50_Most_important_RFE.csv")
-
 colnames(data)<-gsub("AEZ_Names","raster_level_AEZ_names", colnames(data))
 
+write.csv(data,"data/processed/point_data_processed.csv")
+
+data$raster_level_AEZ_names
+
+plot(density(data$LandCultivated, na.rm = T)) #plotting whole column with outliers
+plot(density(data$LandCultivated[identify_outlier_rows_and_NAs(data$LandCultivated)==FALSE], na.rm = T)) #plotting column without outliers
+
+
+# Examining the data set
 dim(data)
 str(data)
 head(data)
-
-
-
-
 colSums(sapply(data, is.na))
 
-X=data[,data%>%colnames%in%most_important_variables$variable[1:20]]
-Y=data$LandCultivated
 
+
+correlationMatrix <- cor(data)
+
+correlationMatrix[,highlyCorrelated]
+
+
+variable_to_predict<-"LandCultivated"
+
+all_predictive_variables<-c(grep("raster_level_", colnames(data)),grep("COUNTRY_LEVEL", colnames(data)))
+
+
+#X=data[,colnames(data)%in%most_important_variables$variable[1:20]]
+X=data[,all_predictive_variables]
+Y=data.frame(data[,colnames(data)==variable_to_predict])
+outliers<-identify_outlier_rows_and_NAs(Y[,1])
+
+X<-X[outliers==F,]
+Y<-data.frame(Y[outliers==F,])
+colnames(Y)<-c(variable_to_predict)
+
+
+lapply(X, function(x) sum((is.na(x))))
+
+data_types<-data.frame("data_class"=sapply(X, class))
+table(data_types$data_class)
+non_factor_columns<-data_types$data_class!="factor"
+X<-X[,non_factor_columns]
+
+melt(data.frame(lapply(X, function(x) var(x))))
+
+# Find std of the column. If there is no standard deviation then it will not be useful as a predictor
+
+
+X_Y<-cbind(X,Y)
+
+
+
+checking_for_na_values<-melt(data.frame(lapply(X_Y, function(x) sum((is.na(x))))))
+checking_for_na_values[checking_for_na_values$value>0,]
+#all variables are non-na
+
+
+checking_for_na_values<-melt(data.frame(lapply(correlationMatrix, function(x) sum((is.na(x))))))
+checking_for_na_values[checking_for_na_values$value>0,]
+
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
+
+cor_x_y<-cor_x_y[,colnames(cor_x_y)==variable_to_predict]
+
+pairs(X) # can produce a pairplot to look at correlations between values
+
+
+outliers<-
 
 
 
